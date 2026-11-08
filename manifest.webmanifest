@@ -1,0 +1,11 @@
+{
+  "name": "Английский с нуля до A1",
+  "short_name": "English A1",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0C0E12",
+  "theme_color": "#0C0E12",
+  "lang": "ru",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

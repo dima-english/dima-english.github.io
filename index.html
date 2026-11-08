@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <title>Английский с нуля до A1</title>
+  <meta name="description" content="Личный курс английского с нуля до уровня A1: правила, слова, фразы, упражнения и интервальное повторение.">
+  <meta name="theme-color" content="#0C0E12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="English A1">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app" class="wrap"></main>
+
+  <nav id="tabs" class="tabs">
+    <button data-tab="home"><span>🗺</span>Курс</button>
+    <button data-tab="review"><span>🔁</span>Повторение</button>
+    <button data-tab="dict"><span>📚</span>Словарь</button>
+    <button data-tab="me"><span>👤</span>Профиль</button>
+  </nav>
+
+  <section id="player" class="player" hidden>
+    <div class="p-top">
+      <button id="pClose" class="p-x" aria-label="Закрыть">✕</button>
+      <div class="p-bar"><i id="pFill"></i></div>
+    </div>
+    <div id="pTag" class="p-tag"></div>
+    <div id="pBody" class="p-body"></div>
+    <div id="sheet" class="sheet"></div>
+    <div class="p-foot">
+      <button id="pAlt" class="btn" hidden>К курсу</button>
+      <button id="go" class="btn primary big">Проверить</button>
+    </div>
+  </section>
+
+  <div id="modal" class="modal" hidden>
+    <div class="m-card">
+      <button id="mClose" class="p-x m-x" aria-label="Закрыть">✕</button>
+      <div id="mBody" class="m-body"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+
+  <script src="course.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
