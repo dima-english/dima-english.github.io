@@ -833,7 +833,7 @@ const COURSE = [
   ]
 },
 {
-  id: "l01", icon: "💻", title: "Моя жизнь: код и техподдержка", life: true,
+  id: "l01", icon: "💻", title: "Моя жизнь: код и техподдержка", life: true, owner: "dima",
   goal: "Слова и фразы для работы с IT и поддержкой клиентов",
   theory: [
     { h: "Английский для работы",
@@ -860,7 +860,7 @@ const COURSE = [
   ]
 },
 {
-  id: "l02", icon: "⚙️", title: "Моя жизнь: ЧПУ и производство", life: true,
+  id: "l02", icon: "⚙️", title: "Моя жизнь: ЧПУ и производство", life: true, owner: "dima",
   goal: "Язык цеха: станок, инструмент, безопасность",
   theory: [
     { h: "Команды в цеху",
@@ -887,7 +887,7 @@ const COURSE = [
   ]
 },
 {
-  id: "l03", icon: "🔑", title: "Моя жизнь: жильё и аренда", life: true,
+  id: "l03", icon: "🔑", title: "Моя жизнь: жильё и аренда", life: true, owner: "dima",
   goal: "Снять жильё и договориться с хозяином",
   theory: [
     { h: "Разговор с хозяином",
@@ -914,7 +914,7 @@ const COURSE = [
   ]
 },
 {
-  id: "l04", icon: "🧭", title: "Моя жизнь: город и выживание", life: true,
+  id: "l04", icon: "🧭", title: "Моя жизнь: город и выживание", life: true, owner: "dima",
   goal: "Рынок, банк, ремонт байка и безопасность",
   theory: [
     { h: "Вежливость решает",
@@ -938,6 +938,132 @@ const COURSE = [
     "Can you ___ this tire?|repair|repairs,repairing|Можете починить эту шину?", "Where is the ___ gas station?|nearest|near,nearer|Где ближайшая заправка?",
     "Is it ___ to walk at night?|safe|save,safety|Безопасно ли гулять ночью?", "I need a SIM card ___ internet.|with|for,and|Мне нужна сим-карта с интернетом.",
     "One ___ of fish, please.|kilo|kilos,kg of|Килограмм рыбы, пожалуйста.", "I'm ___. Can you help me?|lost|lose,loss|Я заблудился. Помогите?"
+  ]
+},
+{
+  id: "a01", icon: "🛒", title: "Моя жизнь: покупки и магазины", life: true, owner: "anya",
+  goal: "Супермаркет, рынок, подарки, обмен и возврат",
+  theory: [
+    { h: "Как найти и спросить",
+      t: "<b>Where can I find …?</b> — Где найти …?<br><b>I'm looking for …</b> — Я ищу …<br><b>Do you have …?</b> — У вас есть …?<br><b>Is this on sale?</b> — Это по акции?<br><br>💡 Продавцу достаточно короткой фразы с <b>please</b> — длинные предложения не нужны.",
+      ex: [["Where can I find the milk?", "Где найти молоко?"], ["I'm looking for a gift.", "Я ищу подарок."], ["Do you have smaller bags?", "У вас есть пакеты поменьше?"]] },
+    { h: "Упаковки и количество",
+      t: "Несчитаемое считаем упаковками: <b>a loaf of bread</b> (буханка хлеба), <b>a pack of rice</b> (пачка риса), <b>a bottle of water</b>, <b>a kilo of apples</b>. Яйца продают <b>a dozen</b> — десяток (точнее, 12).<br><br>Вернуть товар: <b>Can I exchange this?</b> — обменять. <b>I'd like a refund.</b> — вернуть деньги.",
+      ex: [["A loaf of bread, please.", "Буханку хлеба, пожалуйста."], ["A dozen eggs.", "Десяток яиц."], ["Can I exchange this?", "Можно это обменять?"]] }
+  ],
+  words: [
+    "groceries|ˈɡroʊsəriz|продукты", "aisle|aɪl|ряд, проход (в магазине)", "checkout|ˈtʃekaʊt|касса", "cashier|kæˈʃɪr|кассир",
+    "queue|kjuː|очередь", "basket|ˈbæskɪt|корзинка", "cart|kɑːrt|тележка", "pack|pæk|пачка, упаковка", "loaf|loʊf|буханка",
+    "dozen|ˈdʌzən|дюжина, десяток", "frozen|ˈfroʊzən|замороженный", "ripe|raɪp|спелый", "spicy|ˈspaɪsi|острый",
+    "refund|ˈriːfʌnd|возврат денег", "exchange|ɪksˈtʃeɪndʒ|обменять; обмен", "bargain|ˈbɑːrɡən|выгодная покупка",
+    "stationery|ˈsteɪʃəneri|канцтовары", "gift|ɡɪft|подарок", "wrap|ræp|завернуть, упаковать", "shopping list|ˈʃɑːpɪŋ lɪst|список покупок"
+  ],
+  phrases: [
+    "Where can I find the milk?|Где найти молоко?", "I'm looking for a gift for a child.|Я ищу подарок для ребёнка.",
+    "Is this on sale?|Это по акции?", "Can I exchange this?|Можно это обменять?", "I'd like a refund, please.|Я хочу вернуть деньги, пожалуйста.",
+    "Can you wrap it, please?|Можете упаковать, пожалуйста?", "A dozen eggs and a loaf of bread.|Десяток яиц и буханку хлеба.",
+    "Are these mangoes ripe?|Эти манго спелые?"
+  ],
+  gaps: [
+    "Where can I ___ the milk?|find|look,search|Где найти молоко?", "I'm looking ___ a gift.|for|at,to|Я ищу подарок.",
+    "Is this ___ sale?|on|in,at|Это по акции?", "a ___ of bread|loaf|dozen,piece of|буханка хлеба",
+    "a ___ eggs|dozen|ten of,pack|десяток яиц", "Can I ___ this for a bigger size?|exchange|change to,refund|Можно обменять на размер побольше?",
+    "Are these mangoes ___?|ripe|rope,ripen|Эти манго спелые?", "Please wait in the ___.|queue|cashier,aisle|Пожалуйста, ждите в очереди."
+  ]
+},
+{
+  id: "a02", icon: "🧸", title: "Моя жизнь: дети", life: true, owner: "anya",
+  goal: "Говорить с детьми: просьбы, похвала, режим дня, площадка",
+  theory: [
+    { h: "Короткие команды",
+      t: "С детьми говорят повелительным наклонением — глагол в начале:<br><b>Be careful!</b> — Осторожно! <b>Put on your shoes.</b> — Надень обувь.<br><b>Don't touch!</b> — Не трогай! <b>Let's go!</b> — Пойдём!<br><br>Мягче — с <b>please</b> и <b>Can you …?</b>: <b>Can you help me, please?</b>",
+      ex: [["Be careful!", "Осторожно!"], ["Put on your shoes, please.", "Надень, пожалуйста, обувь."], ["Don't touch it!", "Не трогай!"]] },
+    { h: "Похвала",
+      t: "Англоговорящие хвалят детей очень часто: <b>Well done! Good job! Great work! I'm proud of you.</b><br>Утешить: <b>Don't worry. Don't be scared, I'm here.</b>",
+      ex: [["Good job!", "Молодец!"], ["I'm proud of you.", "Я тобой горжусь."], ["Don't be scared, I'm here.", "Не бойся, я здесь."]] }
+  ],
+  words: [
+    "kid|kɪd|ребёнок (разг.)", "toddler|ˈtɑːdlər|малыш (1–3 года)", "playground|ˈpleɪɡraʊnd|детская площадка", "toy|tɔɪ|игрушка",
+    "homework|ˈhoʊmwɜːrk|домашнее задание", "bedtime|ˈbedtaɪm|время спать", "nap|næp|дневной сон", "diaper|ˈdaɪpər|подгузник",
+    "stroller|ˈstroʊlər|коляска", "babysitter|ˈbeɪbisɪtər|няня", "naughty|ˈnɔːti|непослушный", "polite|pəˈlaɪt|вежливый",
+    "share|ʃer|делиться", "bath|bæθ|ванна, купание", "pajamas|pəˈdʒæməz|пижама", "story|ˈstɔːri|сказка, история",
+    "hug|hʌɡ|обнимать; объятие", "careful|ˈkerfəl|осторожный", "scared|skerd|испуганный", "proud|praʊd|гордый"
+  ],
+  phrases: [
+    "Be careful!|Осторожно!", "Good job! I'm proud of you.|Молодец! Я тобой горжусь.", "Time for bed.|Пора спать.",
+    "Put on your shoes, please.|Надень, пожалуйста, обувь.", "Let's go to the playground.|Пойдём на детскую площадку.",
+    "Please share your toys.|Пожалуйста, делись игрушками.", "Did you do your homework?|Ты сделал домашнее задание?",
+    "Don't be scared, I'm here.|Не бойся, я здесь."
+  ],
+  gaps: [
+    "___ careful!|Be|Is,Are|Осторожно!", "Time ___ bed.|for|to,at|Пора спать.", "Put ___ your shoes.|on|in,at|Надень обувь.",
+    "I'm proud ___ you.|of|for,on|Я тобой горжусь.", "Please ___ your toys.|share|shares,sharing|Делись игрушками.",
+    "Did you ___ your homework?|do|did,make|Ты сделал домашнее задание?", "Don't ___ scared.|be|is,are|Не бойся.",
+    "Read me a ___, please!|story|history,book of|Почитай мне сказку!"
+  ]
+},
+{
+  id: "a03", icon: "🍎", title: "Моя жизнь: учитель в классе", life: true, owner: "anya",
+  goal: "Английский учителя начальных классов: команды, похвала, вопросы",
+  theory: [
+    { h: "Классные команды",
+      t: "На уроке учитель говорит коротко, повелительным наклонением:<br><b>Sit down, please. Open your books at page 10. Listen. Repeat after me. Work in pairs. Hands up!</b><br><br>Страница — <b>at page …</b> или <b>on page …</b>.",
+      ex: [["Open your books at page ten.", "Откройте книги на странице десять."], ["Repeat after me.", "Повторяйте за мной."], ["Work in pairs.", "Работайте в парах."]] },
+    { h: "Проверить понимание и похвалить",
+      t: "<b>Do you understand?</b> — Понятно? <b>Any questions?</b> — Есть вопросы? <b>Who knows the answer?</b> — Кто знает ответ?<br>Похвала: <b>Well done! That's correct! Excellent!</b><br>Поддержка: <b>Don't worry, mistakes are OK. Try again!</b>",
+      ex: [["Who knows the answer?", "Кто знает ответ?"], ["Well done, that's correct!", "Молодец, правильно!"], ["Try again!", "Попробуй ещё раз!"]] }
+  ],
+  words: [
+    "classroom|ˈklæsruːm|класс (комната)", "pupil|ˈpjuːpəl|ученик (школьник)", "lesson|ˈlesən|урок", "board|bɔːrd|доска",
+    "desk|desk|парта, письменный стол", "textbook|ˈtekstbʊk|учебник", "worksheet|ˈwɜːrkʃiːt|рабочий лист", "task|tæsk|задание",
+    "pencil|ˈpensəl|карандаш", "eraser|ɪˈreɪsər|ластик", "ruler|ˈruːlər|линейка", "scissors|ˈsɪzərz|ножницы",
+    "crayons|ˈkreɪɑːnz|цветные мелки, карандаши", "line up|laɪn ʌp|построиться", "hands up|hændz ʌp|поднимите руки",
+    "pair|per|пара", "break|breɪk|перемена, перерыв", "answer|ˈænsər|ответ; отвечать", "mistake|mɪˈsteɪk|ошибка",
+    "grade|ɡreɪd|оценка; класс (год обучения)"
+  ],
+  phrases: [
+    "Good morning, class!|Доброе утро, класс!", "Open your books at page ten.|Откройте книги на странице десять.",
+    "Repeat after me.|Повторяйте за мной.", "Work in pairs.|Работайте в парах.",
+    "Hands up if you know the answer.|Поднимите руку, если знаете ответ.", "Please line up at the door.|Постройтесь у двери, пожалуйста.",
+    "Well done, that's correct!|Молодец, правильно!", "Don't worry, mistakes are OK.|Не переживай, ошибаться нормально."
+  ],
+  gaps: [
+    "Open your books ___ page ten.|at|in,of|Откройте книги на странице десять.", "Repeat ___ me.|after|before,with|Повторяйте за мной.",
+    "Work ___ pairs.|in|on,at|Работайте в парах.", "Hands ___!|up|on,top|Руки вверх!", "Please line ___ at the door.|up|in,on|Постройтесь у двери.",
+    "Who ___ the answer?|knows|know,knowing|Кто знает ответ?", "Sit ___, please.|down|up,on|Садитесь, пожалуйста.",
+    "Don't ___, mistakes are OK.|worry|worries,worried|Не переживай, ошибаться нормально."
+  ]
+},
+{
+  id: "a04", icon: "📚", title: "Моя жизнь: репетиторство", life: true, owner: "anya",
+  goal: "Рассказать о себе как о педагоге, договориться с родителями о занятиях",
+  theory: [
+    { h: "Рассказать о себе",
+      t: "<b>I am a primary school teacher.</b> — Я учитель начальных классов.<br><b>I have ten years of experience.</b> — У меня 10 лет опыта.<br><b>I teach reading, writing and math.</b> — Я учу чтению, письму и математике.",
+      ex: [["I am a primary school teacher.", "Я учитель начальных классов."], ["I teach reading and math.", "Я учу чтению и математике."]] },
+    { h: "С родителями",
+      t: "Расписание: <b>Are you available on Tuesday?</b> — Вы свободны во вторник? <b>Can we reschedule?</b> — Можем перенести?<br>Оплата: <b>The fee is … per lesson.</b> — Стоимость … за урок.<br>Успехи: <b>Your son is making good progress.</b> / <b>She needs to improve her reading.</b>",
+      ex: [["The first trial lesson is free.", "Первый пробный урок бесплатный."], ["Can we reschedule the lesson to Friday?", "Можем перенести урок на пятницу?"], ["Your son is making good progress.", "Ваш сын делает хорошие успехи."]] }
+  ],
+  words: [
+    "tutor|ˈtuːtər|репетитор", "parent|ˈperənt|родитель", "progress|ˈprɑːɡres|прогресс, успехи", "level|ˈlevəl|уровень",
+    "schedule|ˈskedʒuːl|расписание", "reschedule|ˌriːˈskedʒuːl|перенести (встречу)", "cancel|ˈkænsəl|отменить", "fee|fiː|плата (за услуги)",
+    "trial lesson|ˈtraɪəl ˈlesən|пробный урок", "online|ˌɑːnˈlaɪn|онлайн", "in person|ɪn ˈpɜːrsən|очно, лично", "reading|ˈriːdɪŋ|чтение",
+    "writing|ˈraɪtɪŋ|письмо (навык)", "math|mæθ|математика", "improve|ɪmˈpruːv|улучшать(ся), подтянуть", "attention|əˈtenʃən|внимание",
+    "hardworking|ˌhɑːrdˈwɜːrkɪŋ|старательный", "available|əˈveɪləbəl|свободный, доступный", "experience|ɪkˈspɪriəns|опыт",
+    "certificate|sərˈtɪfɪkət|сертификат"
+  ],
+  phrases: [
+    "I am a primary school teacher.|Я учитель начальных классов.", "I have ten years of experience.|У меня десять лет опыта.",
+    "The first trial lesson is free.|Первый пробный урок бесплатный.", "One lesson is forty-five minutes.|Один урок — сорок пять минут.",
+    "Your son is making good progress.|Ваш сын делает хорошие успехи.", "Can we reschedule the lesson to Friday?|Можем перенести урок на пятницу?",
+    "Are you available on Tuesday?|Вы свободны во вторник?", "She needs to improve her reading.|Ей нужно подтянуть чтение."
+  ],
+  gaps: [
+    "I am a primary school ___.|teacher|teach,teaching|Я учитель начальных классов.", "I have ten years ___ experience.|of|in,with|У меня десять лет опыта.",
+    "The trial lesson is ___.|free|freely,free of|Пробный урок бесплатный.", "Your son is making good ___.|progress|progresses,success|Ваш сын делает хорошие успехи.",
+    "Can we ___ the lesson to Friday?|reschedule|cancel,schedule|Можем перенести урок на пятницу?", "Are you ___ on Tuesday?|available|availability,free of|Вы свободны во вторник?",
+    "She needs to ___ her reading.|improve|improves,better|Ей нужно подтянуть чтение.", "We can have lessons online or ___.|in person|in persons,by person|Можем заниматься онлайн или очно."
   ]
 },
 { id: "final", icon: "🏆", title: "Экзамен A1", final: true,

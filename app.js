@@ -47,29 +47,103 @@ UNITS.forEach(u => { u.lessons = lessonsOf(u); });
 const LESSONS = UNITS.flatMap(u => u.lessons);
 const LESSON = Object.fromEntries(LESSONS.map(l => [l.id, l]));
 
-/* ========== state ========== */
-const KEY = "a1_course_v1";
-const DEF = { done: {}, srs: {}, xp: 0, streak: 0, lastDay: "", day: "", dayXp: 0, goal: 50, rate: 0.9, voice: "",
-  auto: true, sound: true, speakEx: true, unlockAll: false, seenIntro: false, tab: "home", open: "" };
-let S = load();
+/* ========== users & state ========== */
+const API = (location.hostname === "localhost" && new URLSearchParams(location.search).get("api")) || document.documentElement.dataset.api || "";
+const PEOPLE = { dima: { name: "Дима", icon: "👨‍🔧" }, anya: { name: "Аня", icon: "👩‍🏫" } };
+const OTHER = { dima: "anya", anya: "dima" };
+const OLD_KEY = "a1_course_v1";
+const SESSION_KEY = "a1_session";
+const DEF = { done: {}, srs: {}, xp: 0, streak: 0, best: 0, lastDay: "", day: "", dayXp: 0, wk: "", wkXp: 0, goal: 50, rate: 0.9, voice: "",
+  auto: true, sound: true, speakEx: true, unlockAll: false, seenIntro: false, tab: "home", open: "", updatedAt: 0 };
+const fresh = () => JSON.parse(JSON.stringify(DEF));
+let ME = null, SESSION = null, BOARD = null, SYNC = { at: 0, ok: true, busy: false };
+let S = fresh();
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const lsDel = k => { try { localStorage.removeItem(k); } catch (e) {} };
+const stateKey = () => "a1_course_v1:" + ME;
 function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign(JSON.parse(JSON.stringify(DEF)), JSON.parse(raw)); } catch (e) {}
-  return JSON.parse(JSON.stringify(DEF));
+  let raw = lsGet(stateKey());
+  if (!raw && ME === "dima") raw = lsGet(OLD_KEY);   // прогресс, набранный до появления профилей
+  try { if (raw) return Object.assign(fresh(), JSON.parse(raw)); } catch (e) {}
+  return fresh();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function save() { S.updatedAt = Date.now(); lsSet(stateKey(), JSON.stringify(S)); queuePush(); }
 
+function weekId(t = Date.now()) {
+  const d = new Date(t); d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const w1 = new Date(d.getFullYear(), 0, 4);
+  const n = 1 + Math.round(((d - w1) / DAY - 3 + (w1.getDay() + 6) % 7) / 7);
+  return d.getFullYear() + "-W" + String(n).padStart(2, "0");
+}
 function streakNow() {
   if (!S.lastDay) return 0;
   return (S.lastDay === today() || S.lastDay === dayStr(Date.now() - DAY)) ? S.streak : 0;
 }
 function dayXp() { return S.day === today() ? S.dayXp : 0; }
+const weekXp = () => S.wk === weekId() ? S.wkXp : 0;
 function addXp(n) {
-  const t = today();
+  const t = today(), w = weekId();
   if (S.day !== t) { S.day = t; S.dayXp = 0; }
-  S.dayXp += n; S.xp += n;
+  if (S.wk !== w) { S.wk = w; S.wkXp = 0; }
+  S.dayXp += n; S.wkXp += n; S.xp += n;
   if (S.lastDay !== t) { S.streak = S.lastDay === dayStr(Date.now() - DAY) ? S.streak + 1 : 1; S.lastDay = t; }
+  S.best = Math.max(S.best || 0, S.streak);
   save();
 }
+
+/* ========== server sync (Google-таблица) ========== */
+async function api(action, data) {
+  if (!API) throw new Error("no_api");
+  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action, ...data }) });
+  return r.json();
+}
+function summary() {
+  const nl = nextLesson();
+  return {
+    xp: S.xp, wk: weekId(), wkXp: weekXp(), words: learnedCount("w"), phrases: learnedCount("p"),
+    units: UNITS.filter(u => visible(u) && isDone(u.lessons[u.lessons.length - 1].id)).length,
+    streak: streakNow(), best: S.best || 0, current: nl ? nl.u.title + " — " + nl.title : "Курс пройден"
+  };
+}
+function setBoard(b) { if (b && b.users) { BOARD = b; lsSet("a1_board", JSON.stringify(b)); } }
+let pushT;
+function queuePush() { clearTimeout(pushT); pushT = setTimeout(push, 2000); }
+async function push() {
+  if (!SESSION || !API) return;
+  clearTimeout(pushT);
+  SYNC.busy = true;
+  try {
+    const j = await api("save", { name: ME, token: SESSION.token, summary: summary(), state: S });
+    if (j.ok) { SYNC = { at: Date.now(), ok: true }; setBoard(j.board); }
+    else if (j.error === "auth") return logout("Войдите снова — вход устарел");
+    else SYNC = { at: SYNC.at, ok: false };
+  } catch (e) { SYNC = { at: SYNC.at, ok: false }; }
+  SYNC.busy = false;
+  refreshLive();
+}
+async function pull() {
+  if (!SESSION || !API) return;
+  try {
+    const j = await api("load", { name: ME, token: SESSION.token });
+    if (j.ok) {
+      setBoard(j.board);
+      adopt(j.state);
+      SYNC = { at: Date.now(), ok: true };
+      if (!j.state || (S.updatedAt || 0) > (j.state.updatedAt || 0)) push();
+    } else if (j.error === "auth") return logout("Войдите снова — вход устарел");
+  } catch (e) { SYNC = { at: SYNC.at, ok: false }; }
+  if (!P) render();
+}
+// Берём с сервера, если там прогресс новее (например, занимались на другом устройстве).
+function adopt(remote) {
+  if (remote && (remote.updatedAt || 0) > (S.updatedAt || 0)) {
+    S = Object.assign(fresh(), remote);
+    lsSet(stateKey(), JSON.stringify(S));
+  }
+}
+function refreshLive() { if (!P && (S.tab === "race" || S.tab === "me")) render(); }
 
 /* ========== spaced repetition ========== */
 const STEPS = [1, 3, 7, 16, 35, 80, 180];
@@ -97,7 +171,8 @@ function unlocked(l) {
   if (u.final) return isDone(CORE[CORE.length - 1].id + "-x");
   return isDone(UNITS[u.n - 1].id + "-x");
 }
-const nextLesson = () => LESSONS.find(l => unlocked(l) && !isDone(l.id));
+const visible = u => !u.owner || u.owner === ME;
+const nextLesson = () => LESSONS.find(l => visible(l.u) && unlocked(l) && !isDone(l.id));
 const unitDone = u => u.lessons.filter(l => isDone(l.id)).length;
 
 /* ========== speech ========== */
@@ -114,11 +189,12 @@ function pickVoice() {
 function say(text, slow) {
   if (!TTS || !text) return;
   try {
-    speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(String(text).replace(/_{2,}/g, " ... ").replace(/[—–]/g, ","));
     const v = pickVoice(); u.lang = v ? v.lang : "en-US"; if (v) u.voice = v;
     u.rate = slow ? 0.55 : S.rate;
-    setTimeout(() => speechSynthesis.speak(u), 40);
+    // iPhone озвучивает только прямо в ответ на нажатие, поэтому без задержки, если ничего не звучит
+    if (speechSynthesis.speaking || speechSynthesis.pending) { speechSynthesis.cancel(); setTimeout(() => speechSynthesis.speak(u), 40); }
+    else speechSynthesis.speak(u);
   } catch (e) {}
 }
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -463,7 +539,8 @@ function goClick() {
 
 function finish() {
   const pct = P.total ? Math.round(P.correct / P.total * 100) : 100;
-  let xp = 5 + P.correct + (pct === 100 && P.total >= 5 ? 10 : 0);
+  const again = P.mode !== "review" && isDone(P.lesson.id);
+  let xp = 5 + P.correct + (pct === 100 && P.total >= 5 && !again ? 10 : 0);
   let title, sub, passed = true;
   if (P.mode === "review") {
     title = "Повторение завершено"; sub = `Правильно с первого раза: ${P.correct} из ${P.total}. Слова, которые вы помните, вернутся реже, а забытые — завтра.`;
@@ -482,8 +559,10 @@ function finish() {
       sub = l.kind === "words" || l.kind === "phrases" ? "Новые слова добавлены в повторение — они вернутся завтра." : "Продолжайте в том же духе.";
     }
     if (passed) { const prev = S.done[l.id]; S.done[l.id] = { best: Math.max(pct, prev ? prev.best : 0), at: Date.now() }; }
+    // за повтор уже пройденного урока опыта меньше — чтобы соревнование было честным
+    if (again) { xp = Math.max(2, Math.round(xp / 3)); sub += " Урок пройден повторно — опыта меньше, чем за новый."; }
   }
-  addXp(xp); save();
+  addXp(xp); save(); push();
   const nl = nextLesson();
   $("#pFill").style.transform = "scaleX(1)";
   $("#sheet").className = "sheet";
@@ -505,21 +584,24 @@ function finish() {
 /* ========== screens ========== */
 function render() {
   $$("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === S.tab));
-  ({ home: homeView, review: reviewView, dict: dictView, me: meView })[S.tab]();
-  window.scrollTo(0, 0);
+  ({ home: homeView, review: reviewView, race: raceView, dict: dictView, me: meView }[S.tab] || homeView)();
 }
-function go(tab) { S.tab = tab; save(); render(); }
+function go(tab) {
+  S.tab = tab; save(); render(); window.scrollTo(0, 0);
+  if (tab === "race") push();
+}
 
 function topBar() {
   const dx = dayXp(), pct = Math.min(100, Math.round(dx / S.goal * 100));
-  return `<div class="topbar"><div class="tb-item" title="Дней подряд">🔥 <b>${streakNow()}</b></div>
+  return `<div class="topbar"><button class="tb-me" id="tbMe" title="Профиль">${PEOPLE[ME].icon}</button><div class="tb-item" title="Дней подряд">🔥 <b>${streakNow()}</b></div>
     <div class="tb-item" title="Опыт">⭐ <b>${S.xp}</b></div>
     <div class="tb-goal" title="Цель дня"><div class="goal-ring" style="--p:${pct}"></div><span>${dx}/${S.goal}</span></div></div>`;
 }
 
 function homeView() {
   const nl = nextLesson(), due = dueItems().length;
-  const doneAll = LESSONS.filter(l => isDone(l.id)).length;
+  const myLessons = LESSONS.filter(l => visible(l.u));
+  const doneAll = myLessons.filter(l => isDone(l.id)).length;
   const corePct = Math.round(CORE.flatMap(u => u.lessons).filter(l => isDone(l.id)).length / (CORE.length * 6) * 100);
   const sect = (title, list) => `<h3 class="sec">${title}</h3>` + list.map(unitCard).join("");
   $("#app").innerHTML = topBar() + `
@@ -532,12 +614,12 @@ function homeView() {
       <button class="btn" id="introOk">Понятно, начинаем</button></div>` : ""}
     <div class="card hero">
       <div class="hero-top"><div><div class="kicker">Уровень A1</div><div class="hero-pct">${corePct}%</div></div>
-      <div class="hero-meta">${doneAll} из ${LESSONS.length} уроков<br>${learnedCount("w")} слов выучено</div></div>
+      <div class="hero-meta">${doneAll} из ${myLessons.length} уроков<br>${learnedCount("w")} слов выучено</div></div>
       <div class="track"><i style="transform:scaleX(${corePct / 100})"></i></div>
       ${nl ? `<button class="btn primary big" id="cont">${doneAll ? "Продолжить" : "Начать"} · ${esc(nl.u.title)} — ${esc(nl.title)}</button>` : `<div class="hero-done">Все уроки пройдены 🎉</div>`}
     </div>
     ${seenCount("w") ? `<div class="card rev-mini" id="revMini"><div><b>${due ? due + " на повторение" : "Повторение сделано ✓"}</b><small>${due ? "Сначала повторите — так слова не забываются" : "Новые слова для повторения появятся завтра"}</small></div><span class="arrow">›</span></div>` : ""}
-    ${sect("Основной курс", CORE)}${sect("Моя жизнь — бонусные темы", UNITS.filter(u => u.life))}${sect("Финал", UNITS.filter(u => u.final))}`;
+    ${sect("Основной курс", CORE)}${sect("Моя жизнь — бонусные темы", UNITS.filter(u => u.life && visible(u)))}${sect("Финал", UNITS.filter(u => u.final))}`;
   const io = $("#introOk"); if (io) io.onclick = () => { S.seenIntro = true; save(); render(); };
   const c = $("#cont"); if (c) c.onclick = () => startLesson(nl);
   const rm = $("#revMini"); if (rm) rm.onclick = () => go("review");
@@ -591,12 +673,14 @@ function wordRow(it) {
 
 let dictQ = "", dictAll = false;
 function dictView() {
+  const units = UNITS.filter(u => !u.final && visible(u));
+  const total = units.reduce((n, u) => n + [...u.words, ...u.phrases].filter(it => ITEMS.get(it.k) === it).length, 0);
   $("#app").innerHTML = topBar() + `<div class="card"><input id="dq" class="type-in" placeholder="Поиск: по-английски или по-русски" value="${esc(dictQ)}">
-    <div class="seg"><button data-f="0" class="${dictAll ? "" : "on"}">Мои слова (${seenCount("w") + seenCount("p")})</button><button data-f="1" class="${dictAll ? "on" : ""}">Весь курс (${ITEMS.size})</button></div></div>
+    <div class="seg"><button data-f="0" class="${dictAll ? "" : "on"}">Мои слова (${seenCount("w") + seenCount("p")})</button><button data-f="1" class="${dictAll ? "on" : ""}">Весь курс (${total})</button></div></div>
     <div id="dlist"></div>`;
   const draw = () => {
     const q = norm(dictQ);
-    const out = UNITS.filter(u => !u.final).map(u => {
+    const out = units.map(u => {
       const list = [...u.words, ...u.phrases].filter(it => ITEMS.get(it.k) === it && (dictAll || S.srs[it.k]) && (!q || norm(it.en).includes(q) || norm(it.ru).includes(q)));
       return list.length ? `<h3 class="sec">${u.icon} ${esc(u.title)}</h3><div class="card wlist">${list.map(wordRow).join("")}</div>` : "";
     }).join("");
@@ -608,8 +692,13 @@ function dictView() {
 }
 
 function meView() {
-  const passed = UNITS.filter(u => isDone(u.lessons[u.lessons.length - 1].id)).length;
-  $("#app").innerHTML = topBar() + `<div class="card">
+  const passed = UNITS.filter(u => visible(u) && isDone(u.lessons[u.lessons.length - 1].id)).length;
+  const syncTxt = !API ? "Таблица ещё не подключена — прогресс только на этом устройстве"
+    : SYNC.ok && SYNC.at ? "☁️ Сохранено в таблице · " + new Date(SYNC.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : SYNC.ok ? "☁️ Соединяюсь с таблицей…" : "⚠️ Нет связи с таблицей — прогресс сохранится, когда появится интернет";
+  $("#app").innerHTML = topBar() + `<div class="card me-card"><div class="me-av">${PEOPLE[ME].icon}</div><div class="me-txt"><b>${PEOPLE[ME].name}</b><small>${syncTxt}</small></div>
+    <button class="btn me-out" id="bOut">Выйти</button></div>
+    <div class="card">
     <div class="stats3"><div><b>${S.xp}</b>опыта</div><div><b>${streakNow()}</b>дней подряд</div><div><b>${passed}</b>тем сдано</div></div>
     <div class="stats3"><div><b>${learnedCount("w")}</b>слов выучено</div><div><b>${learnedCount("p")}</b>фраз</div><div><b>${LESSONS.filter(l => isDone(l.id)).length}</b>уроков</div></div></div>
     <h3 class="sec">Настройки</h3><div class="card set">
@@ -620,7 +709,7 @@ function meView() {
     ${toggle("auto", "Автоозвучка слов")}${toggle("sound", "Звуки ответов")}${SR ? toggle("speakEx", "Задания на произношение (микрофон)") : ""}${toggle("unlockAll", "Открыть все уроки (для тех, кто уже знает основы)")}
     </div>
     <h3 class="sec">Прогресс</h3><div class="card set">
-    <p class="muted">Прогресс хранится в этом браузере. Сделайте копию, чтобы перенести на другой телефон или не потерять.</p>
+    <p class="muted">Прогресс автоматически сохраняется в общей Google-таблице: можно войти с любого телефона по своему PIN. Копия-файл — на всякий случай.</p>
     <button class="btn" id="bExp">⬇ Сохранить копию прогресса</button>
     <label class="btn file">⬆ Загрузить копию<input type="file" id="bImp" accept="application/json,.json" hidden></label>
     <button class="btn danger" id="bReset">Сбросить весь прогресс</button></div>
@@ -641,7 +730,153 @@ function meView() {
     f.text().then(t => { const d = JSON.parse(t); if (!d || typeof d.srs !== "object") throw 0; S = Object.assign(JSON.parse(JSON.stringify(DEF)), d); save(); toast("Прогресс загружен"); render(); })
       .catch(() => toast("Не удалось прочитать файл"));
   };
-  $("#bReset").onclick = () => { if (confirm("Удалить весь прогресс? Это нельзя отменить.")) { S = JSON.parse(JSON.stringify(DEF)); save(); render(); } };
+  $("#bReset").onclick = () => { if (confirm("Удалить весь прогресс? Это нельзя отменить.")) { S = fresh(); save(); render(); } };
+  $("#bOut").onclick = () => { if (confirm("Выйти из профиля «" + PEOPLE[ME].name + "»? Чтобы войти снова, понадобится PIN.")) { push(); logout(); } };
+}
+
+/* ========== соревнование ========== */
+function raceView() {
+  const wk = weekId();
+  const b = BOARD || { users: {}, weeks: [] };
+  const other = OTHER[ME];
+  const me = Object.assign({}, b.users[ME] || {}, summary(), { name: PEOPLE[ME].name, updated: Date.now() });
+  const op = Object.assign({ name: PEOPLE[other].name, xp: 0, wkXp: 0, wk: "", words: 0, phrases: 0, units: 0, streak: 0, best: 0, current: "", updated: 0 }, b.users[other] || {});
+  const opWk = op.wk === wk ? op.wkXp : 0;
+  // огонёк соперника гаснет, если он не занимался вчера и сегодня
+  const opStreak = op.updated && Date.now() - op.updated < 2 * DAY ? op.streak : 0;
+  const people = { [ME]: { ...me, wkNow: me.wkXp, streakNow: me.streak }, [other]: { ...op, wkNow: opWk, streakNow: opStreak } };
+  const wins = { dima: 0, anya: 0 };
+  b.weeks.filter(w => w.wk !== wk && w.wk < wk).forEach(w => { if (w.dima > w.anya) wins.dima++; else if (w.anya > w.dima) wins.anya++; });
+  const diff = people[ME].wkNow - people[other].wkNow;
+  const daysLeft = 7 - ((new Date().getDay() + 6) % 7);
+  const msg = !API ? "Подключите таблицу, чтобы видеть результаты друг друга"
+    : people[ME].wkNow === 0 && people[other].wkNow === 0 ? "Новая неделя — кто первым наберёт опыт? 🚀"
+    : diff > 0 ? `Ты впереди на ${diff} опыта! Не сбавляй темп 💪`
+    : diff < 0 ? `${op.name} впереди на ${-diff} опыта — ${-diff <= 30 ? "хватит одного урока!" : "пара уроков, и догонишь!"}`
+    : "Ничья! Один урок решит всё ⚔️";
+  const maxWk = Math.max(1, people.dima.wkNow, people.anya.wkNow);
+  const lane = k => {
+    const p = people[k], lead = p.wkNow > people[OTHER[k]].wkNow;
+    return `<div class="lane ${k === ME ? "mine" : ""}"><div class="lane-h"><span>${PEOPLE[k].icon} ${esc(PEOPLE[k].name)}${lead ? " 👑" : ""}</span><b>${p.wkNow}</b></div>
+      <div class="lane-bar"><i style="transform:scaleX(${p.wkNow / maxWk})"></i></div></div>`;
+  };
+  const row = (label, key) => {
+    const a = people[ME][key] || 0, c = people[other][key] || 0;
+    return `<tr><td>${label}</td><td class="${a > c ? "win" : ""}">${a}</td><td class="${c > a ? "win" : ""}">${c}</td></tr>`;
+  };
+  const seen = op.updated ? new Date(op.updated) : null;
+  const seenTxt = !seen ? "ещё не занимался(ась)" : dayStr(seen) === today() ? "сегодня в " + seen.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : dayStr(seen) === dayStr(Date.now() - DAY) ? "вчера" : seen.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  const hist = b.weeks.filter(w => w.wk < wk).sort((x, y) => (x.wk < y.wk ? 1 : -1)).slice(0, 6);
+  $("#app").innerHTML = topBar() + `
+    <div class="card hero race">
+      <div class="kicker">Неделя · осталось ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft < 5 ? "дня" : "дней"}</div>
+      <div class="race-msg">${msg}</div>
+      ${lane("dima")}${lane("anya")}
+    </div>
+    <div class="card trophies"><div><span>🏆</span><b>${wins.dima}</b><small>${PEOPLE.dima.name}</small></div><div class="vs">кубки<br>за недели</div><div><span>🏆</span><b>${wins.anya}</b><small>${PEOPLE.anya.name}</small></div></div>
+    <h3 class="sec">За всё время</h3>
+    <div class="card"><table class="cmp"><tr><th></th><th>${PEOPLE[ME].icon} ${PEOPLE[ME].name}</th><th>${PEOPLE[other].icon} ${PEOPLE[other].name}</th></tr>
+      ${row("Опыт", "xp")}${row("Слов выучено", "words")}${row("Фраз выучено", "phrases")}${row("Тем сдано", "units")}${row("Огонёк сейчас", "streakNow")}${row("Рекорд огонька", "best")}
+    </table></div>
+    <div class="card muted"><b>${PEOPLE[other].icon} ${esc(op.name)}</b> занимался(ась): ${seenTxt}${op.current ? `<br>Сейчас учит: ${esc(op.current)}` : ""}</div>
+    ${hist.length ? `<h3 class="sec">Прошлые недели</h3><div class="card wlist">${hist.map(w => `<div class="wrow static"><span class="w-en">${weekLabel(w.wk)}</span><span class="w-ru">Дима ${w.dima} · Аня ${w.anya}</span><span class="dots">${w.dima > w.anya ? PEOPLE.dima.icon + "🏆" : w.anya > w.dima ? PEOPLE.anya.icon + "🏆" : "🤝"}</span></div>`).join("")}</div>` : ""}
+    <p class="muted center small">Опыт дают уроки и повторение. Неделя — с понедельника по воскресенье, победитель недели получает кубок.</p>`;
+}
+function weekLabel(wk) {
+  const [y, w] = wk.split("-W").map(Number);
+  const jan4 = new Date(y, 0, 4), mon = new Date(jan4); mon.setDate(jan4.getDate() - (jan4.getDay() + 6) % 7 + (w - 1) * 7);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const f = d => d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  return f(mon) + " — " + f(sun);
+}
+
+/* ========== вход по PIN ========== */
+let LG = null;
+function showLogin(note) {
+  ME = null; document.body.classList.add("in-login");
+  $("#login").hidden = false;
+  LG = { step: "who", note: note || "" };
+  drawLogin();
+}
+function drawLogin() {
+  const box = $("#login");
+  if (LG.step === "who") {
+    box.innerHTML = `<div class="lg-wrap"><div class="lg-logo">A1</div><h1>Английский с нуля до A1</h1><p class="muted">Кто сейчас занимается?</p>
+      ${LG.note ? `<div class="lg-note">${esc(LG.note)}</div>` : ""}
+      <div class="who">${Object.keys(PEOPLE).map(k => `<button class="who-b" data-who="${k}"><span>${PEOPLE[k].icon}</span>${PEOPLE[k].name}</button>`).join("")}</div>
+      ${!API ? `<p class="muted small center">Таблица не подключена — вход работает только на этом устройстве.</p>` : ""}</div>`;
+    $$(".who-b", box).forEach(b => b.onclick = () => choose(b.dataset.who));
+    return;
+  }
+  const titles = { pin: "Введите PIN", create: "Придумайте PIN", confirm: "Повторите PIN", wait: "Проверяю…" };
+  box.innerHTML = `<div class="lg-wrap"><button class="p-x lg-back" id="lgBack">‹</button>
+    <div class="lg-av">${PEOPLE[LG.who].icon}</div><h2>${PEOPLE[LG.who].name}</h2>
+    <p class="lg-t">${titles[LG.step]}</p>
+    ${LG.step === "create" ? `<p class="muted small center">4 цифры. Его будете знать только вы — запомните или запишите.</p>` : ""}
+    <div class="pin-dots ${LG.shake ? "shake" : ""}">${[0, 1, 2, 3].map(i => `<i class="${i < LG.pin.length ? "on" : ""}"></i>`).join("")}</div>
+    <div class="lg-err">${esc(LG.err || "")}</div>
+    <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "⌫"].map(d => d === "" ? "<span></span>" : `<button class="key" data-k="${d}">${d}</button>`).join("")}</div></div>`;
+  LG.shake = false;
+  $("#lgBack").onclick = () => { LG = { step: "who" }; drawLogin(); };
+  $$(".key", box).forEach(b => b.onclick = () => key(b.dataset.k));
+}
+async function choose(who) {
+  LG = { step: "wait", who, pin: "", err: "" };
+  drawLogin();
+  if (!API) { LG.step = lsGet("a1_localpin:" + who) ? "pin" : "create"; return drawLogin(); }
+  try {
+    const j = await api("status", { name: who });
+    LG.step = j.ok && j.hasPin ? "pin" : "create";
+  } catch (e) { LG = { step: "who", note: "Нет связи с интернетом. Для входа нужен интернет." }; }
+  drawLogin();
+}
+function key(k) {
+  if (LG.step === "wait") return;
+  if (k === "⌫") { LG.pin = LG.pin.slice(0, -1); return drawLogin(); }
+  if (LG.pin.length >= 4) return;
+  LG.pin += k; LG.err = "";
+  drawLogin();
+  if (LG.pin.length === 4) setTimeout(submitPin, 120);
+}
+async function submitPin() {
+  const pin = LG.pin;
+  if (LG.step === "create") { LG.first = pin; LG.step = "confirm"; LG.pin = ""; return drawLogin(); }
+  if (LG.step === "confirm" && pin !== LG.first) { LG = { ...LG, step: "create", pin: "", err: "PIN не совпал — придумайте заново", shake: true }; return drawLogin(); }
+  const create = LG.step === "confirm";
+  LG.step = "wait"; drawLogin();
+  if (!API) {
+    const saved = lsGet("a1_localpin:" + LG.who);
+    if (create) lsSet("a1_localpin:" + LG.who, pin);
+    if (!create && saved !== pin) { LG = { ...LG, step: "pin", pin: "", err: "Неверный PIN", shake: true }; return drawLogin(); }
+    return enter(LG.who, "local", null, null);
+  }
+  try {
+    const j = await api("login", { name: LG.who, pin, create });
+    if (j.ok) return enter(LG.who, j.token, j.state, j.board);
+    const err = j.error === "wrong_pin" ? `Неверный PIN. Осталось попыток: ${j.left}`
+      : j.error === "locked" ? `Слишком много попыток. Попробуйте через ${j.minutes} мин.`
+      : j.error === "no_pin" ? "PIN ещё не задан — придумайте его" : "Ошибка входа: " + j.error;
+    LG = { ...LG, step: j.error === "no_pin" ? "create" : "pin", pin: "", err, shake: true };
+  } catch (e) { LG = { ...LG, step: create ? "create" : "pin", pin: "", err: "Нет связи. Проверьте интернет и попробуйте ещё раз.", shake: true }; }
+  drawLogin();
+}
+function enter(who, token, remote, board) {
+  SESSION = { name: who, token };
+  lsSet(SESSION_KEY, JSON.stringify(SESSION));
+  ME = who; S = load();
+  setBoard(board);
+  adopt(remote);
+  $("#login").hidden = true; $("#login").innerHTML = ""; document.body.classList.remove("in-login");
+  S.tab = "home"; render(); window.scrollTo(0, 0);
+  if (API) { SYNC = { at: Date.now(), ok: true }; if (!remote || (S.updatedAt || 0) > (remote.updatedAt || 0)) push(); }
+}
+function logout(note) {
+  clearTimeout(pushT);
+  SESSION = null; lsDel(SESSION_KEY);
+  if (P) { $("#player").hidden = true; P = null; document.body.classList.remove("in-player"); }
+  S = fresh(); BOARD = null;
+  showLogin(note);
 }
 const toggle = (k, label) => `<label class="tg"><span>${label}</span><input type="checkbox" data-k="${k}" ${S[k] ? "checked" : ""}><i></i></label>`;
 
@@ -657,6 +892,7 @@ document.addEventListener("click", e => {
   const sl = e.target.closest("[data-slow]"); if (sl) { say(sl.dataset.slow, true); }
 });
 $("#tabs").onclick = e => { const b = e.target.closest("button"); if (b) go(b.dataset.tab); };
+$("#app").addEventListener("click", e => { if (e.target.closest("#tbMe")) go("me"); });
 $("#go").onclick = goClick;
 $("#pClose").onclick = () => { if (!P || P.finished || P.i < 2 || confirm("Выйти из урока? Прогресс этого урока не сохранится.")) closePlayer(); };
 $("#pAlt").onclick = () => closePlayer();
@@ -670,5 +906,17 @@ document.addEventListener("keydown", e => {
     const b = $$(st.type === "choice" ? ".opt" : ".chip")[+e.key - 1]; if (b) b.click();
   }
 });
-render();
+
+/* ========== запуск ========== */
+(function boot() {
+  try { SESSION = JSON.parse(lsGet(SESSION_KEY) || "null"); } catch (e) { SESSION = null; }
+  if (!SESSION || !PEOPLE[SESSION.name]) { SESSION = null; return showLogin(); }
+  ME = SESSION.name; S = load();
+  try { BOARD = JSON.parse(lsGet("a1_board") || "null"); } catch (e) {}
+  render();
+  pull();
+  // вернулись в приложение — подтягиваем свежие данные соперника и сохраняем своё
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && SESSION && !P) pull(); });
+  window.addEventListener("online", () => { if (SESSION) push(); });
+})();
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

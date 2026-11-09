@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-api="">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -22,6 +22,7 @@
   <nav id="tabs" class="tabs">
     <button data-tab="home"><span>🗺</span>Курс</button>
     <button data-tab="review"><span>🔁</span>Повторение</button>
+    <button data-tab="race"><span>🏆</span>Соревнование</button>
     <button data-tab="dict"><span>📚</span>Словарь</button>
     <button data-tab="me"><span>👤</span>Профиль</button>
   </nav>
@@ -47,6 +48,7 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
+  <section id="login" class="login" hidden></section>
 
   <script src="course.js"></script>
   <script src="app.js"></script>

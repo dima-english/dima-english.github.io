@@ -263,3 +263,58 @@ b { font-weight: 650; }
   .modal { align-items: center; }
   .m-card { border-radius: 24px; }
 }
+
+/* профиль в шапке */
+.tb-me { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: 19px; }
+.tabs button { font-size: 10.5px; }
+.me-card { display: flex; align-items: center; gap: 14px; }
+.me-av { width: 52px; height: 52px; flex: none; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: 28px; }
+.me-txt { flex: 1; min-width: 0; }
+.me-txt b { display: block; font-size: 18px; }
+.me-txt small { display: block; color: var(--text-2); font-size: 12px; line-height: 1.35; }
+.me-out { width: auto; min-height: 40px; padding: 8px 14px; font-size: 14px; }
+
+/* соревнование */
+.race-msg { font-size: 19px; font-weight: 700; line-height: 1.3; margin: 6px 0 16px; }
+.lane { margin-top: 12px; }
+.lane-h { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.lane-h b { font-variant-numeric: tabular-nums; }
+.lane-bar { height: 14px; background: var(--inset); border-radius: 999px; overflow: hidden; }
+.lane-bar i { display: block; height: 100%; border-radius: 999px; background: var(--text-3); transform-origin: left; transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.lane.mine .lane-bar i { background: linear-gradient(90deg, var(--accent), var(--ok)); }
+.trophies { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; text-align: center; }
+.trophies span { font-size: 26px; display: block; }
+.trophies b { font-size: 28px; display: block; line-height: 1.1; }
+.trophies small { color: var(--text-2); font-size: 13px; }
+.trophies .vs { color: var(--text-3); font-size: 12px; line-height: 1.3; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 15px; }
+.cmp th { font-size: 13px; color: var(--text-2); font-weight: 600; padding: 0 4px 10px; text-align: center; }
+.cmp td { padding: 9px 4px; border-top: 1px solid var(--border); text-align: center; font-variant-numeric: tabular-nums; }
+.cmp td:first-child { text-align: left; color: var(--text-2); }
+.cmp td.win { color: var(--ok); font-weight: 700; }
+.wrow.static { cursor: default; }
+.wrow.static .dots { font-size: 16px; }
+
+/* вход */
+.login { position: fixed; inset: 0; z-index: 50; background: var(--bg); overflow-y: auto; }
+body.in-login .tabs, body.in-login #app { display: none; }
+.lg-wrap { max-width: 400px; margin: 0 auto; padding: calc(var(--safe-t) + 40px) 24px calc(var(--safe-b) + 30px); text-align: center; position: relative; }
+.lg-logo { width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); display: grid; place-items: center; font-size: 28px; font-weight: 800; color: var(--accent); }
+.lg-wrap h1 { font-size: 24px; margin-bottom: 6px; }
+.lg-wrap h2 { font-size: 22px; margin-top: 8px; }
+.lg-note { margin: 16px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--bad-soft); color: var(--bad); font-size: 14px; }
+.who { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 28px; }
+.who-b { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 10px; border-radius: var(--r); background: var(--surface); border: 2px solid var(--border); font-size: 19px; font-weight: 700; }
+.who-b span { font-size: 52px; line-height: 1; }
+.who-b:active { border-color: var(--accent); transform: scale(.98); }
+.lg-back { position: absolute; left: 16px; top: calc(var(--safe-t) + 20px); font-size: 24px; }
+.lg-av { width: 84px; height: 84px; margin: 10px auto 0; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: grid; place-items: center; font-size: 46px; }
+.lg-t { color: var(--text-2); margin-top: 6px; font-size: 16px; }
+.pin-dots { display: flex; justify-content: center; gap: 18px; margin: 26px 0 10px; }
+.pin-dots i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--text-3); }
+.pin-dots i.on { background: var(--accent); border-color: var(--accent); }
+.pin-dots.shake { animation: shake .35s; }
+.lg-err { min-height: 22px; color: var(--bad); font-size: 14px; }
+.pad { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; justify-content: center; margin-top: 18px; }
+.key { width: 76px; height: 76px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: 28px; font-weight: 500; }
+.key:active { background: var(--surface-2); transform: scale(.95); }
