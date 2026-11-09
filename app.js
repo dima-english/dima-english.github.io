@@ -49,7 +49,7 @@ const LESSON = Object.fromEntries(LESSONS.map(l => [l.id, l]));
 
 /* ========== users & state ========== */
 const API = (location.hostname === "localhost" && new URLSearchParams(location.search).get("api")) || document.documentElement.dataset.api || "";
-const PEOPLE = { dima: { name: "Дима", icon: "👨‍🔧" }, anya: { name: "Аня", icon: "👩‍🏫" } };
+const PEOPLE = { dima: { name: "Дима", icon: "👨‍🔧" }, anya: { name: "Аня", icon: "👩‍🏫", f: true } };
 const OTHER = { dima: "anya", anya: "dima" };
 const OLD_KEY = "a1_course_v1";
 const SESSION_KEY = "a1_session";
@@ -83,10 +83,14 @@ function streakNow() {
 }
 function dayXp() { return S.day === today() ? S.dayXp : 0; }
 const weekXp = () => S.wk === weekId() ? S.wkXp : 0;
+const weekDays = () => (S.wd && S.wd.wk === weekId() ? S.wd.d : [0, 0, 0, 0, 0, 0, 0]);
+const MEDAL_DAYS = 5;
 function addXp(n) {
   const t = today(), w = weekId();
   if (S.day !== t) { S.day = t; S.dayXp = 0; }
   if (S.wk !== w) { S.wk = w; S.wkXp = 0; }
+  if (!S.wd || S.wd.wk !== w) S.wd = { wk: w, d: [0, 0, 0, 0, 0, 0, 0] };
+  S.wd.d[(new Date().getDay() + 6) % 7] += n;
   S.dayXp += n; S.wkXp += n; S.xp += n;
   if (S.lastDay !== t) { S.streak = S.lastDay === dayStr(Date.now() - DAY) ? S.streak + 1 : 1; S.lastDay = t; }
   S.best = Math.max(S.best || 0, S.streak);
@@ -96,13 +100,19 @@ function addXp(n) {
 /* ========== server sync (Google-таблица) ========== */
 async function api(action, data) {
   if (!API) throw new Error("no_api");
-  const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action, ...data }) });
-  return r.json();
+  // не ждём сеть бесконечно: через 20 с считаем, что связи нет
+  const ctl = "AbortController" in window ? new AbortController() : null;
+  const t = setTimeout(() => ctl && ctl.abort(), 20000);
+  try {
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action, ...data }), signal: ctl ? ctl.signal : undefined });
+    return await r.json();
+  } finally { clearTimeout(t); }
 }
 function summary() {
   const nl = nextLesson();
   return {
-    xp: S.xp, wk: weekId(), wkXp: weekXp(), words: learnedCount("w"), phrases: learnedCount("p"),
+    xp: S.xp, wk: weekId(), wkXp: weekXp(), goal: S.goal, days: weekDays(),
+    daysMet: weekDays().filter(x => x >= S.goal).length, words: learnedCount("w"), phrases: learnedCount("p"),
     units: UNITS.filter(u => visible(u) && isDone(u.lessons[u.lessons.length - 1].id)).length,
     streak: streakNow(), best: S.best || 0, current: nl ? nl.u.title + " — " + nl.title : "Курс пройден"
   };
@@ -110,17 +120,25 @@ function summary() {
 function setBoard(b) { if (b && b.users) { BOARD = b; lsSet("a1_board", JSON.stringify(b)); } }
 let pushT;
 function queuePush() { clearTimeout(pushT); pushT = setTimeout(push, 2000); }
+let pushing = false, pushAgain = false;
 async function push() {
   if (!SESSION || !API) return;
   clearTimeout(pushT);
-  SYNC.busy = true;
+  // одно сохранение за раз: иначе старое могло прийти в таблицу позже нового
+  if (pushing) { pushAgain = true; return; }
+  pushing = true;
+  const who = ME;
   try {
-    const j = await api("save", { name: ME, token: SESSION.token, summary: summary(), state: S });
+    const j = await api("save", { name: who, token: SESSION.token, summary: summary(), state: S });
+    if (who !== ME) return;
     if (j.ok) { SYNC = { at: Date.now(), ok: true }; setBoard(j.board); }
-    else if (j.error === "auth") return logout("Войдите снова — вход устарел");
+    else if (j.error === "auth") { pushAgain = false; return logout("Войдите снова — вход устарел"); }
     else SYNC = { at: SYNC.at, ok: false };
   } catch (e) { SYNC = { at: SYNC.at, ok: false }; }
-  SYNC.busy = false;
+  finally {
+    pushing = false;
+    if (pushAgain && SESSION) { pushAgain = false; push(); }
+  }
   refreshLive();
 }
 async function pull() {
@@ -213,7 +231,8 @@ function beep(ok) {
       o.connect(g).connect(AC.destination); o.start(s); o.stop(s + 0.22);
     });
   } catch (e) {}
-  if (!ok && navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+  const touched = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (!ok && navigator.vibrate && touched) try { navigator.vibrate(60); } catch (e) {}
 }
 
 /* ========== exercise builders ========== */
@@ -324,9 +343,10 @@ function startLesson(l) {
 function startReview(force) {
   let items = dueItems();
   if (!items.length && force) items = Object.entries(S.srs).filter(([k]) => ITEMS.has(k)).sort((a, b) => a[1].due - b[1].due).map(([k]) => ITEMS.get(k));
+  const extra = !dueItems().length;   // тренировка сверх расписания — опыта меньше
   items = items.slice(0, 15);
   if (!items.length) return;
-  P = { mode: "review", steps: buildReview(shuffle(items)), i: 0, correct: 0, total: 0 };
+  P = { mode: "review", extra, steps: buildReview(shuffle(items)), i: 0, correct: 0, total: 0 };
   openPlayer();
 }
 function openPlayer() {
@@ -336,6 +356,7 @@ function openPlayer() {
 }
 function closePlayer() {
   $("#player").hidden = true; $("#pAlt").hidden = true; document.body.classList.remove("in-player");
+  stopRec();
   if (TTS) speechSynthesis.cancel();
   P = null; render();
 }
@@ -376,7 +397,7 @@ function renderStep() {
     }
     case "type":
       h = `<div class="kicker">Напишите по-английски</div><div class="q-ru">${esc(it.ru)}</div>
-        <input id="typeIn" class="type-in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Введите ответ">
+        <input id="typeIn" class="type-in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="Введите ответ">
         <button class="link" id="hintBtn">💡 Подсказка</button><div id="hintOut" class="hint-out"></div>`;
       break;
     case "tiles":
@@ -470,23 +491,35 @@ function matchTap(st, b) {
   }
 }
 
+let REC = null;
+function stopRec() { if (REC) { try { REC.abort(); } catch (e) {} REC = null; } }
 function listenSpeak(st) {
+  if (REC || P.answered) return;                       // уже слушаем или фраза уже засчитана
   const out = $("#micOut"), mic = $("#mic");
+  const still = () => P && P.steps[P.i] === st && document.body.contains(out);
   try {
-    const r = new SR(); r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 3;
-    mic.classList.add("on"); out.textContent = "Слушаю…";
+    const r = new SR(); REC = r; r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 3;
+    mic.classList.add("on"); out.textContent = "Слушаю…"; out.className = "mic-out";
     r.onresult = e => {
+      if (!still()) return;
       const alts = [...e.results[0]].map(a => a.transcript);
       const target = norm(st.item.en).split(" ");
       let best = 0, heard = alts[0] || "";
       alts.forEach(a => { const w = norm(a).split(" "); const sc = target.filter(t => w.includes(t)).length / target.length; if (sc > best) { best = sc; heard = a; } });
-      if (best >= 0.7) { beep(true); out.innerHTML = `✅ Отлично! Услышал: «${esc(heard)}»`; out.className = "mic-out good"; setGo("Дальше", true); P.answered = true; addXp(2); }
-      else { out.innerHTML = `Услышал: «${esc(heard)}». Попробуйте ещё раз — медленнее и чётче.`; out.className = "mic-out"; }
+      if (best >= 0.7) { beep(true); out.innerHTML = `✅ Отлично! Услышал: «${esc(heard)}»`; out.className = "mic-out good"; setGo("Дальше", true); P.answered = true; P.spoke = (P.spoke || 0) + 1; }
+      else { out.innerHTML = `Услышал: «${esc(heard)}». Попробуйте ещё раз — медленнее и чётче.`; }
     };
-    r.onerror = e => { out.textContent = e.error === "not-allowed" ? "Нет доступа к микрофону. Разрешите его в браузере или пропустите." : "Не расслышал. Попробуйте ещё раз."; };
-    r.onend = () => mic.classList.remove("on");
+    r.onerror = e => {
+      if (!still()) return;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        // на iPhone в режиме «на экране Домой» распознавание недоступно — больше не предлагаем
+        S.speakEx = false; save();
+        out.textContent = "Микрофон недоступен на этом устройстве. Задания на произношение отключены (включить можно в Профиле).";
+      } else out.textContent = e.error === "no-speech" ? "Ничего не услышал. Нажмите на микрофон и скажите фразу." : "Не расслышал. Попробуйте ещё раз.";
+    };
+    r.onend = () => { REC = null; mic.classList.remove("on"); };
     r.start();
-  } catch (e) { out.textContent = "Распознавание речи недоступно в этом браузере."; }
+  } catch (e) { REC = null; mic.classList.remove("on"); out.textContent = "Распознавание речи недоступно в этом браузере. Нажмите «Пропустить»."; }
 }
 
 function record(st, ok) {
@@ -517,7 +550,7 @@ function check() {
     $("#blank").classList.add(ok ? "right" : "bad");
     $$(".chip").forEach(b => { const v = st.options[+b.dataset.opt]; if (v === st.gap.a) b.classList.add("right"); else if (v === P.sel) b.classList.add("bad"); });
   }
-  P.answered = true;
+  P.answered = true; P.checkedAt = Date.now();
   record(st, ok); beep(ok);
   const sh = $("#sheet");
   sh.className = "sheet show " + (ok ? "ok" : "bad");
@@ -530,20 +563,23 @@ function check() {
 }
 
 function goClick() {
-  if (!P) return;
+  if (!P || P.finished) return;
+  // случайное двойное нажатие не должно проглатывать экран с правильным ответом
+  if (P.checkedAt && Date.now() - P.checkedAt < 400) return;
   const st = P.steps[P.i];
   const passive = st.type === "theory" || st.type === "intro" || st.type === "speak" || st.type === "match";
-  if (passive || P.answered) { P.i++; return P.i >= P.steps.length ? finish() : renderStep(); }
+  if (passive || P.answered) { stopRec(); P.checkedAt = 0; P.i++; return P.i >= P.steps.length ? finish() : renderStep(); }
   check();
 }
 
 function finish() {
   const pct = P.total ? Math.round(P.correct / P.total * 100) : 100;
   const again = P.mode !== "review" && isDone(P.lesson.id);
-  let xp = 5 + P.correct + (pct === 100 && P.total >= 5 && !again ? 10 : 0);
+  let xp = 5 + P.correct + (P.spoke || 0) * 2 + (pct === 100 && P.total >= 5 && !again ? 10 : 0);
   let title, sub, passed = true;
   if (P.mode === "review") {
     title = "Повторение завершено"; sub = `Правильно с первого раза: ${P.correct} из ${P.total}. Слова, которые вы помните, вернутся реже, а забытые — завтра.`;
+    if (P.extra) { xp = Math.max(2, Math.round(xp / 3)); sub += " Это была тренировка сверх расписания — опыта за неё меньше."; }
   } else {
     const l = P.lesson;
     if (l.kind === "test") {
@@ -736,52 +772,92 @@ function meView() {
 
 /* ========== соревнование ========== */
 function raceView() {
-  const wk = weekId();
-  const b = BOARD || { users: {}, weeks: [] };
-  const other = OTHER[ME];
-  const me = Object.assign({}, b.users[ME] || {}, summary(), { name: PEOPLE[ME].name, updated: Date.now() });
-  const op = Object.assign({ name: PEOPLE[other].name, xp: 0, wkXp: 0, wk: "", words: 0, phrases: 0, units: 0, streak: 0, best: 0, current: "", updated: 0 }, b.users[other] || {});
-  const opWk = op.wk === wk ? op.wkXp : 0;
-  // огонёк соперника гаснет, если он не занимался вчера и сегодня
-  const opStreak = op.updated && Date.now() - op.updated < 2 * DAY ? op.streak : 0;
-  const people = { [ME]: { ...me, wkNow: me.wkXp, streakNow: me.streak }, [other]: { ...op, wkNow: opWk, streakNow: opStreak } };
-  const wins = { dima: 0, anya: 0 };
-  b.weeks.filter(w => w.wk !== wk && w.wk < wk).forEach(w => { if (w.dima > w.anya) wins.dima++; else if (w.anya > w.dima) wins.anya++; });
-  const diff = people[ME].wkNow - people[other].wkNow;
-  const daysLeft = 7 - ((new Date().getDay() + 6) % 7);
-  const msg = !API ? "Подключите таблицу, чтобы видеть результаты друг друга"
-    : people[ME].wkNow === 0 && people[other].wkNow === 0 ? "Новая неделя — кто первым наберёт опыт? 🚀"
-    : diff > 0 ? `Ты впереди на ${diff} опыта! Не сбавляй темп 💪`
-    : diff < 0 ? `${op.name} впереди на ${-diff} опыта — ${-diff <= 30 ? "хватит одного урока!" : "пара уроков, и догонишь!"}`
-    : "Ничья! Один урок решит всё ⚔️";
-  const maxWk = Math.max(1, people.dima.wkNow, people.anya.wkNow);
-  const lane = k => {
-    const p = people[k], lead = p.wkNow > people[OTHER[k]].wkNow;
-    return `<div class="lane ${k === ME ? "mine" : ""}"><div class="lane-h"><span>${PEOPLE[k].icon} ${esc(PEOPLE[k].name)}${lead ? " 👑" : ""}</span><b>${p.wkNow}</b></div>
-      <div class="lane-bar"><i style="transform:scaleX(${p.wkNow / maxWk})"></i></div></div>`;
+  const wk = weekId(), b = BOARD || { users: {}, weeks: [] }, other = OTHER[ME];
+  const dayIdx = (new Date().getDay() + 6) % 7;
+  const srv = b.users[other] || {}, os = srv.s || null;
+  const me = Object.assign(summary(), { name: PEOPLE[ME].name, updated: Date.now() });
+  const op = {
+    name: PEOPLE[other].name, xp: srv.xp || 0, words: srv.words || 0, phrases: srv.phrases || 0, units: srv.units || 0,
+    best: srv.best || 0, current: srv.current || "", updated: srv.updated || 0,
+    wkXp: srv.wk === wk ? srv.wkXp || 0 : 0,
+    goal: (os && os.goal) || 50,
+    days: os ? (os.wk === wk && Array.isArray(os.days) ? os.days : [0, 0, 0, 0, 0, 0, 0]) : null,   // null — сервер старой версии
+    streak: srv.updated && Date.now() - srv.updated < 2 * DAY ? srv.streak || 0 : 0
   };
-  const row = (label, key) => {
-    const a = people[ME][key] || 0, c = people[other][key] || 0;
-    return `<tr><td>${label}</td><td class="${a > c ? "win" : ""}">${a}</td><td class="${c > a ? "win" : ""}">${c}</td></tr>`;
+  const ppl = { [ME]: me, [other]: op };
+  const end = k => (PEOPLE[k].f ? "а" : "");
+  const met = p => (p.days ? p.days.filter(x => x >= p.goal).length : 0);
+
+  // 1. Общая цель недели — вклад каждого складывается
+  const teamXp = me.wkXp + op.wkXp, teamGoal = (me.goal + op.goal) * MEDAL_DAYS;
+  const teamDone = teamXp >= teamGoal;
+  const teamMsg = teamDone ? "🎉 Общая цель недели выполнена! Вы отличная команда."
+    : teamXp >= teamGoal * 0.6 ? "Цель уже близко — ещё немного вместе!"
+    : teamXp > 0 ? "Каждый урок двигает команду вперёд 💪" : "Новая неделя — начнём вместе! 🚀";
+  const seg = k => `<i class="seg-${k}" style="width:${Math.min(100, ppl[k].wkXp / teamGoal * 100)}%"></i>`;
+
+  // 2. Дни с выполненной целью: медаль получает каждый, кто занимался 5 дней из 7
+  const dots = k => {
+    const p = ppl[k];
+    if (!p.days) return `<div class="muted small">Дни появятся, когда ${p.name} откроет обновлённое приложение</div>`;
+    return `<div class="wdays">${["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d, i) => {
+      const ok = p.days[i] >= p.goal;
+      return `<span class="wd ${ok ? "met" : p.days[i] > 0 ? "part" : ""} ${i === dayIdx ? "today" : ""}"><i>${ok ? "✓" : ""}</i>${d}</span>`;
+    }).join("")}</div>`;
   };
-  const seen = op.updated ? new Date(op.updated) : null;
-  const seenTxt = !seen ? "ещё не занимался(ась)" : dayStr(seen) === today() ? "сегодня в " + seen.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
-    : dayStr(seen) === dayStr(Date.now() - DAY) ? "вчера" : seen.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  const medalTxt = k => {
+    const p = ppl[k], m = met(p);
+    if (!p.days) return "";
+    if (m >= MEDAL_DAYS) return "🏅 Медаль недели получена!";
+    const left = MEDAL_DAYS - m, daysLeft = 7 - dayIdx - (p.days[dayIdx] >= p.goal ? 1 : 0);
+    return left > daysLeft ? `${m} ${plural(m, "день", "дня", "дней")} с целью — хорошая неделя!` : `До медали: ${left} ${plural(left, "день", "дня", "дней")}`;
+  };
+  const person = k => `<div class="pday ${k === ME ? "mine" : ""}"><div class="pday-h"><span>${PEOPLE[k].icon} ${esc(ppl[k].name)}</span><small>цель дня: ${ppl[k].goal}</small></div>${dots(k)}<div class="pday-m">${medalTxt(k)}</div></div>`;
+
+  // медали за все недели
+  const medals = { dima: 0, anya: 0 };
+  b.weeks.filter(w => w.wk < wk).forEach(w => { if ((w.dimaDays || 0) >= MEDAL_DAYS) medals.dima++; if ((w.anyaDays || 0) >= MEDAL_DAYS) medals.anya++; });
+  [ME, other].forEach(k => { if (met(ppl[k]) >= MEDAL_DAYS) medals[k]++; });
+
+  // 3. Мой рост — сравниваю себя с собой, а не с другим
+  const pw = b.weeks.find(w => w.wk === weekId(Date.now() - 7 * DAY));
+  const prev = pw ? pw[ME] || 0 : 0;
+  const growth = !prev ? (me.wkXp ? `На этой неделе уже ${me.wkXp} опыта — так держать!` : "Начни неделю с одного короткого урока 🌱")
+    : me.wkXp >= prev ? `Уже больше, чем за всю прошлую неделю (${prev}) 🚀`
+    : `На прошлой неделе было ${prev} опыта. Ещё ${prev - me.wkXp} — и рекорд повторён`;
+
+  // 4. Новости партнёра — только хорошее
+  const opToday = op.updated && dayStr(op.updated) === today();
+  const news = !op.updated ? `${op.name} ещё не начинал${end(other)} — позовите заниматься вместе!`
+    : op.days && op.days[dayIdx] >= op.goal ? `👏 ${op.name} сегодня выполнил${end(other)} цель дня`
+    : opToday ? `📖 ${op.name} сегодня занимал${end(other) ? "ась" : "ся"}`
+    : `${op.name} последний раз занимал${end(other) ? "ась" : "ся"} ${dayStr(op.updated) === dayStr(Date.now() - DAY) ? "вчера" : new Date(op.updated).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}`;
+
+  const row = (label, key) => `<tr><td>${label}</td><td>${ppl[ME][key] || 0}</td><td>${ppl[other][key] || 0}</td></tr>`;
   const hist = b.weeks.filter(w => w.wk < wk).sort((x, y) => (x.wk < y.wk ? 1 : -1)).slice(0, 6);
+  const medalMark = d => (d >= MEDAL_DAYS ? "🏅" : "·");
   $("#app").innerHTML = topBar() + `
     <div class="card hero race">
-      <div class="kicker">Неделя · осталось ${daysLeft} ${daysLeft === 1 ? "день" : daysLeft < 5 ? "дня" : "дней"}</div>
-      <div class="race-msg">${msg}</div>
-      ${lane("dima")}${lane("anya")}
+      <div class="kicker">Общая цель недели · ${7 - dayIdx} ${plural(7 - dayIdx, "день", "дня", "дней")} до конца</div>
+      <div class="race-msg">${teamMsg}</div>
+      <div class="team-bar ${teamDone ? "done" : ""}">${seg("dima")}${seg("anya")}</div>
+      <div class="team-legend"><span><i class="dot seg-dima"></i>${PEOPLE.dima.name}</span><span><i class="dot seg-anya"></i>${PEOPLE.anya.name}</span><b>${teamXp} / ${teamGoal}</b></div>
     </div>
-    <div class="card trophies"><div><span>🏆</span><b>${wins.dima}</b><small>${PEOPLE.dima.name}</small></div><div class="vs">кубки<br>за недели</div><div><span>🏆</span><b>${wins.anya}</b><small>${PEOPLE.anya.name}</small></div></div>
-    <h3 class="sec">За всё время</h3>
+    <div class="card news">${esc(news)}${op.current ? `<small>Сейчас учит: ${esc(op.current)}</small>` : ""}</div>
+    <h3 class="sec">Дни с выполненной целью</h3>
+    <div class="card">${person(ME)}${person(other)}
+      <p class="muted small">Медаль недели получает каждый, кто выполнил свою цель дня ${MEDAL_DAYS} дней из 7 — медаль могут получить оба. Цель дня у каждого своя, её можно поменять в Профиле.</p></div>
+    <div class="card trophies"><div><span>🏅</span><b>${medals.dima}</b><small>${PEOPLE.dima.name}</small></div><div class="vs">медали<br>недели</div><div><span>🏅</span><b>${medals.anya}</b><small>${PEOPLE.anya.name}</small></div></div>
+    <div class="card growth"><div class="kicker">Мой рост</div>${growth}</div>
+    <h3 class="sec">Наши успехи</h3>
     <div class="card"><table class="cmp"><tr><th></th><th>${PEOPLE[ME].icon} ${PEOPLE[ME].name}</th><th>${PEOPLE[other].icon} ${PEOPLE[other].name}</th></tr>
-      ${row("Опыт", "xp")}${row("Слов выучено", "words")}${row("Фраз выучено", "phrases")}${row("Тем сдано", "units")}${row("Огонёк сейчас", "streakNow")}${row("Рекорд огонька", "best")}
+      ${row("Слов выучено", "words")}${row("Фраз выучено", "phrases")}${row("Тем сдано", "units")}${row("Огонёк сейчас", "streak")}${row("Рекорд огонька", "best")}${row("Опыт всего", "xp")}
     </table></div>
-    <div class="card muted"><b>${PEOPLE[other].icon} ${esc(op.name)}</b> занимался(ась): ${seenTxt}${op.current ? `<br>Сейчас учит: ${esc(op.current)}` : ""}</div>
-    ${hist.length ? `<h3 class="sec">Прошлые недели</h3><div class="card wlist">${hist.map(w => `<div class="wrow static"><span class="w-en">${weekLabel(w.wk)}</span><span class="w-ru">Дима ${w.dima} · Аня ${w.anya}</span><span class="dots">${w.dima > w.anya ? PEOPLE.dima.icon + "🏆" : w.anya > w.dima ? PEOPLE.anya.icon + "🏆" : "🤝"}</span></div>`).join("")}</div>` : ""}
-    <p class="muted center small">Опыт дают уроки и повторение. Неделя — с понедельника по воскресенье, победитель недели получает кубок.</p>`;
+    ${hist.length ? `<h3 class="sec">Прошлые недели</h3><div class="card wlist">${hist.map(w => `<div class="wrow static"><span class="w-en">${weekLabel(w.wk)}</span><span class="w-ru">Вместе: ${(w.dima || 0) + (w.anya || 0)} опыта</span><span class="dots">${PEOPLE.dima.icon}${medalMark(w.dimaDays || 0)} ${PEOPLE.anya.icon}${medalMark(w.anyaDays || 0)}</span></div>`).join("")}</div>` : ""}`;
+}
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 }
 function weekLabel(wk) {
   const [y, w] = wk.split("-W").map(Number);
@@ -899,6 +975,10 @@ $("#pAlt").onclick = () => closePlayer();
 $("#mClose").onclick = () => { $("#modal").hidden = true; };
 $("#modal").onclick = e => { if (e.target.id === "modal") $("#modal").hidden = true; };
 document.addEventListener("keydown", e => {
+  if (!$("#login").hidden && LG && LG.who) {
+    if (/^\d$/.test(e.key)) key(e.key); else if (e.key === "Backspace") key("⌫");
+    return;
+  }
   if (!P) return;
   if (e.key === "Enter" && !$("#go").disabled) { e.preventDefault(); $("#go").click(); return; }
   const st = P.steps[P.i];

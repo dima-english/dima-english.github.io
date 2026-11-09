@@ -318,3 +318,32 @@ body.in-login .tabs, body.in-login #app { display: none; }
 .pad { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; justify-content: center; margin-top: 18px; }
 .key { width: 76px; height: 76px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: 28px; font-weight: 500; }
 .key:active { background: var(--surface-2); transform: scale(.95); }
+
+/* старые iPhone не знают свойство inset */
+.player, .modal, .login { top: 0; right: 0; bottom: 0; left: 0; }
+
+/* мягкое соревнование */
+.team-bar { display: flex; height: 16px; background: var(--inset); border-radius: 999px; overflow: hidden; }
+.team-bar i { display: block; height: 100%; transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+.seg-dima { background: var(--accent); }
+.seg-anya { background: #F58BC1; }
+.team-bar.done { box-shadow: 0 0 0 2px var(--ok); }
+.team-legend { display: flex; gap: 14px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.team-legend b { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.news { font-size: 15px; font-weight: 600; }
+.news small { display: block; font-weight: 400; color: var(--text-2); font-size: 13px; margin-top: 4px; }
+.pday { padding: 4px 0 14px; }
+.pday + .pday { border-top: 1px solid var(--border); padding-top: 14px; }
+.pday-h { display: flex; justify-content: space-between; align-items: baseline; font-weight: 650; margin-bottom: 10px; }
+.pday-h small { color: var(--text-3); font-weight: 500; font-size: 12px; }
+.pday-m { font-size: 13px; color: var(--text-2); margin-top: 8px; }
+.wdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.wd { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--text-3); }
+.wd i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--inset); border: 2px solid var(--border); font-style: normal; font-weight: 800; color: #0C0E12; font-size: 14px; }
+.wd.part i { border-color: rgba(61, 214, 140, .45); }
+.wd.met i { background: var(--ok); border-color: var(--ok); }
+.wd.today { color: var(--text); font-weight: 700; }
+.wd.today i { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow); }
+.growth { font-size: 15px; line-height: 1.4; }
+.growth .kicker { margin-bottom: 4px; }

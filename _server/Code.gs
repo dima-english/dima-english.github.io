@@ -17,8 +17,8 @@ const LOCK_MINUTES = 15;
 const CHUNK = 40000;
 
 const ACCESS_HEAD = ["Имя", "PIN (зашифрован) — очистите, чтобы сбросить", "Входы (служебное)", "Ошибок подряд", "Блок до"];
-const STUDENT_HEAD = ["Имя", "Опыт", "Опыт за неделю", "Неделя", "Слов выучено", "Фраз выучено", "Тем сдано", "Огонёк", "Рекорд огонька", "Сейчас учит", "Обновлено"];
-const WEEK_HEAD = ["Неделя", "Дима", "Аня"];
+const STUDENT_HEAD = ["Имя", "Опыт", "Опыт за неделю", "Неделя", "Слов выучено", "Фраз выучено", "Тем сдано", "Огонёк", "Рекорд огонька", "Сейчас учит", "Обновлено", "Сводка (служебное)"];
+const WEEK_HEAD = ["Неделя", "Дима (опыт)", "Аня (опыт)", "Дима (дней с целью)", "Аня (дней с целью)"];
 const STATE_HEAD = ["Имя", "Обновлено", "Данные (служебное, не редактировать)"];
 
 function doGet() { return out({ ok: true, service: "english-a1" }); }
@@ -27,7 +27,7 @@ function doPost(e) {
   let req;
   try { req = JSON.parse(e.postData.contents); } catch (err) { return out({ ok: false, error: "bad_request" }); }
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  if (!lock.tryLock(20000)) return out({ ok: false, error: "busy" });
   try {
     if (req.action === "ping") return out({ ok: true });
     if (!USERS[req.name]) return out({ ok: false, error: "unknown_user" });
@@ -58,6 +58,9 @@ function sheet(name, head) {
     sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight("bold");
     sh.setFrozenRows(1);
     sh.getRange("A:A").setNumberFormat("@");
+  } else if (sh.getLastColumn() < head.length) {
+    // лист от прошлой версии — дописываем новые столбцы в шапку
+    sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight("bold");
   }
   return sh;
 }
@@ -143,12 +146,15 @@ function save(req) {
   const r = ensureRow(st, USERS[req.name]);
   st.getRange(r, 1, 1, STUDENT_HEAD.length).setValues([[
     USERS[req.name], num(s.xp), num(s.wkXp), String(s.wk || ""), num(s.words), num(s.phrases), num(s.units),
-    num(s.streak), num(s.best), String(s.current || "").slice(0, 120), new Date()
+    num(s.streak), num(s.best), String(s.current || "").slice(0, 120), new Date(),
+    "~" + JSON.stringify(s).slice(0, 4000)
   ]]);
   if (/^\d{4}-W\d{2}$/.test(String(s.wk || ""))) {
     const wk = sheet("Недели", WEEK_HEAD);
     const wr = ensureRow(wk, s.wk);
-    wk.getRange(wr, req.name === "dima" ? 2 : 3).setValue(num(s.wkXp));
+    const dima = req.name === "dima";
+    wk.getRange(wr, dima ? 2 : 3).setValue(num(s.wkXp));
+    wk.getRange(wr, dima ? 4 : 5).setValue(num(s.daysMet));
   }
   if (req.state) {
     const json = JSON.stringify(req.state);
@@ -164,15 +170,17 @@ function board() {
   const users = {};
   Object.keys(USERS).forEach(k => {
     const v = rows.find(x => x[0] === USERS[k]) || [];
+    let s = null;
+    try { s = v[11] ? JSON.parse(String(v[11]).replace(/^~/, "")) : null; } catch (e) {}
     users[k] = {
       name: USERS[k], xp: num(v[1]), wkXp: num(v[2]), wk: String(v[3] || ""), words: num(v[4]), phrases: num(v[5]),
       units: num(v[6]), streak: num(v[7]), best: num(v[8]), current: String(v[9] || ""),
-      updated: v[10] instanceof Date ? v[10].getTime() : 0
+      updated: v[10] instanceof Date ? v[10].getTime() : 0, s
     };
   });
   const wk = sheet("Недели", WEEK_HEAD);
   const weeks = wk.getLastRow() > 1
-    ? wk.getRange(2, 1, wk.getLastRow() - 1, 3).getValues().map(v => ({ wk: String(v[0]), dima: num(v[1]), anya: num(v[2]) }))
+    ? wk.getRange(2, 1, wk.getLastRow() - 1, 5).getValues().map(v => ({ wk: String(v[0]), dima: num(v[1]), anya: num(v[2]), dimaDays: num(v[3]), anyaDays: num(v[4]) }))
     : [];
   return { users, weeks };
 }
