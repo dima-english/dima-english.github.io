@@ -1,5 +1,5 @@
 // Офлайн-кэш курса. При изменении файлов курса увеличьте версию.
-const CACHE = "eng-a1-v3";
+const CACHE = "eng-a1-v4";
 const FILES = ["./", "index.html", "style.css", "course.js", "app.js", "icon.svg", "manifest.webmanifest"];
 
 self.addEventListener("install", e => {
